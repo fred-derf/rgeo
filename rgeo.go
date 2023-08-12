@@ -151,33 +151,29 @@ func New(datasets ...func() []byte) (*Rgeo, error) {
 
 	ret.pointQuery = s2.NewContainsPointQuery(ret.index, s2.VertexModelOpen)
 
-	// default snapping distance is 5km on earth
+	// Default snapping distance is 5km on earth
 	ret.SetSnappingDistanceEarth(5)
 
 	return ret, nil
 }
 
-// SetSnappingDistanceEarth recalculates the underlying ChordAngle used to describe
-// the DistanceLimit of the query assuming the dataset contains earth data
+// SetSnappingDistanceEarth sets ReverseGeocodeSnapping snap distance on Earth.
+// Only edges within the defined radius around given points will be considered
+// by ReverseGeocodeSnapping.
 //
-// The input is a float64, which is the snapping distance in km
+// The input is the snapping distance in kilometers. Must be positive.
 func (r *Rgeo) SetSnappingDistanceEarth(d float64) {
-	// earth radius
-	angle := math.Sin(d / 6371)
-	options := s2.NewClosestEdgeQueryOptions().
-		MaxResults(1).
-		DistanceLimit(s1.ChordAngleFromAngle(s1.Angle(angle)).Successor())
-	r.edgeQuery = s2.NewClosestEdgeQuery(r.index, options)
+	const earthRadiusKM = 6371
+	r.SetSnappingDistanceCustom(d, earthRadiusKM)
 }
 
-// SetSnappingDistanceCustom recalculates the underlying ChordAngle used to describe
-// the DistanceLimit of the query for custom datasets that don't contain earth data
+// SetSnappingDistanceCustom recalculates the underlying ChordAngle for the
+// DistanceLimit of nearest-edge queries via ReverseGeocodeSnapping.
 //
-// The inputs are a float64, which is the snapping distance and a float64 holding
-// the radius of the sphere used in the dataset
-func (r *Rgeo) SetSnappingDistanceCustom(d float64, f float64) {
-	// assuming we are using earth data, thus earth radius
-	angle := math.Sin(d / f)
+// The inputs are the snapping distance on the sphere's surface in kilometers,
+// and the radius of the sphere used in the dataset.
+func (r *Rgeo) SetSnappingDistanceCustom(d float64, radius float64) {
+	angle := math.Sin(d / radius)
 	options := s2.NewClosestEdgeQueryOptions().
 		MaxResults(1).
 		DistanceLimit(s1.ChordAngleFromAngle(s1.Angle(angle)).Successor())
@@ -199,22 +195,22 @@ func (r *Rgeo) ReverseGeocode(loc geom.Coord) (Location, error) {
 }
 
 func (r *Rgeo) ReverseGeocodeSnapping(coord geom.Coord) (Location, error) {
-	// try to get a hit first, i.e. we are already in a country
+	// Try to get a hit first, i.e. we are already in a country
 	loc, err := r.ReverseGeocode(coord)
 	if err == nil {
 		return loc, nil
-	} else if err != ErrLocationNotFound {
+	} else if !errors.Is(err, ErrLocationNotFound) {
 		return Location{}, err
 	}
 
-	// not in a country, so look for the closest country in the defined margin
+	// Not in a country, so look for the closest country in the defined margin
 	point := pointFromCoord(coord)
 	res := r.edgeQuery.FindEdges(s2.NewMinDistanceToPointTarget(point))
-	if len(res) < 1 {
+	if len(res) == 0 {
 		return Location{}, ErrLocationNotFound
 	}
 
-	// get shape of the closest country in our margin
+	// Get shape of the closest country in our margin
 	shape := r.index.Shape(res[0].ShapeID())
 	if shape == nil {
 		return Location{}, ErrLocationNotFound
