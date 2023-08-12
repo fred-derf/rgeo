@@ -526,6 +526,37 @@ func ExampleRgeo_ReverseGeocode_city() {
 	// Output: <Location> Sapporo, Hokkaidō, Japan (JPN), Asia
 }
 
+func ExampleRgeo_ReverseGeocode_Snapping() {
+	r, err := New(Provinces10)
+	if err != nil {
+		// Handle error
+	}
+
+	loc, err := r.ReverseGeocodeSnapping([]float64{141.5439, 40.5588})
+	if err != nil {
+		// Handle error
+	}
+
+	fmt.Println(loc)
+	// Output: <Location> Aomori, Japan,
+}
+
+func ExampleRgeo_ReverseGeocode_Snapping_NoCountry() {
+	r, err := New(Provinces10)
+	if err != nil {
+		// Handle error
+	}
+
+	r.SetSnappingDistanceEarth(3.06)
+	loc, err := r.ReverseGeocodeSnapping([]float64{141.5439, 40.5588})
+	if err != nil {
+		// Handle error
+	}
+
+	fmt.Println(loc)
+	// Output: <Location> Empty Location
+}
+
 func BenchmarkReverseGeocode_110(b *testing.B) {
 	r, err := New(Countries110)
 	if err != nil {
