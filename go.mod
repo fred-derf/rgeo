@@ -1,4 +1,4 @@
-module github.com/sams96/rgeo
+module github.com/fred-derf/rgeo
 
 go 1.19
 
